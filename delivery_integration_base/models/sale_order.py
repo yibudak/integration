@@ -2,7 +2,6 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl)
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
-from odoo.addons import decimal_precision as dp
 
 
 class SaleOrder(models.Model):
@@ -17,7 +16,7 @@ class SaleOrder(models.Model):
     delivery_price_try = fields.Monetary(
         string="Delivery Price (TRY)",
         currency_field="currency_id_try",
-        digits=dp.get_precision("Product Price"),
+        digits="Product Price",
         readonly=True,
     )
 
@@ -29,7 +28,7 @@ class SaleOrder(models.Model):
 
     sale_deci = fields.Float(
         string="Sale Deci",
-        digits=dp.get_precision("Product Unit of Measure"),
+        digits="Product Unit of Measure",
     )
 
     # @api.multi

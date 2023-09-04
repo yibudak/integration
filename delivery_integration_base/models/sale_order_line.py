@@ -1,7 +1,6 @@
 # Copyright 2023 Yiğit Budak (https://github.com/yibudak)
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl)
 from odoo import models, fields, api, _
-from odoo.addons import decimal_precision as dp
 from odoo.tools import float_is_zero
 
 
@@ -10,7 +9,7 @@ class SaleOrderLine(models.Model):
 
     deci = fields.Float(
         string="Deci",
-        digits=dp.get_precision("Product Unit of Measure"),
+        digits="Product Unit of Measure",
     )
 
     # @api.multi
