@@ -96,7 +96,6 @@ class DeliveryCarrierLines(models.TransientModel):
     price = fields.Monetary(
         string="Price",
         currency_field="currency_id",
-        digits="Product Price",
     )
     try_currency_id = fields.Many2one(
         "res.currency",
@@ -106,7 +105,6 @@ class DeliveryCarrierLines(models.TransientModel):
     try_price = fields.Monetary(
         string="Main Price",
         currency_field="try_currency_id",
-        digits="Product Price",
     )
     order_id = fields.Many2one("sale.order", string="Sale Order")
     selected = fields.Boolean(string="Selected", default=False)

@@ -16,13 +16,12 @@ class SaleOrder(models.Model):
     delivery_price_try = fields.Monetary(
         string="Delivery Price (TRY)",
         currency_field="currency_id_try",
-        digits="Product Price",
         readonly=True,
     )
 
     currency_id_try = fields.Many2one(
         related="company_id.currency_id",
-        string="Currency",
+        string="Currency TRY",
         readonly=True,
     )
 
