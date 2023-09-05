@@ -26,7 +26,7 @@ class DeliveryCarrier(models.Model):
         default="sender_pays",
         required=True,
     )
-    default_printer_id = fields.Many2one("printing.printer", string="Default Printer")
+    # default_printer_id = fields.Many2one("printing.printer", string="Default Printer")
     attach_barcode = fields.Boolean(
         string="Attach Barcode to Picking",
         default=False,
@@ -35,7 +35,7 @@ class DeliveryCarrier(models.Model):
     currency_id = fields.Many2one("res.currency", string="Currency", required=True)
     ref_sequence_id = fields.Many2one("ir.sequence", string="Reference Sequence")
     send_sms_customer = fields.Boolean(string="Send SMS to Customer", default=False)
-    url_shortener_id = fields.Many2one("short.url.yourls", string="URL Shortener")
+    # url_shortener_id = fields.Many2one("short.url.yourls", string="URL Shortener")
     sms_service_id = fields.Many2one("iap.account", string="SMS Service")
 
     barcode_text_1 = fields.Char(
