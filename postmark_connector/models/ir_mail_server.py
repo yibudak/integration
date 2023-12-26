@@ -49,7 +49,9 @@ def convert_to_mime(email_msg: EmailMessage):
         else:
             payload = part.get_payload(decode=True)
             content_type = part.get_content_type().lower()
-            # mime_part = payload.decode('utf-8')
+
+            if 'text' in content_type:
+                mime_part = payload.decode('utf-8')
 
             # Determine part's content type
             if 'text/plain' in content_type:
