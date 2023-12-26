@@ -20,11 +20,6 @@ from email import encoders
 from email.message import EmailMessage
 
 
-
-def is_bytes(obj):
-    return isinstance(obj, bytes)
-
-
 def convert_to_mime(email_msg: EmailMessage):
     # Create a MIMEMultipart object
     mime_msg = MIMEMultipart()
