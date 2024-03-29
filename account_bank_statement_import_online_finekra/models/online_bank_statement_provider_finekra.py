@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 
-FINEKRA_ENDPOINT = 'https://polynom-api.paratic.com.tr'
+FINEKRA_ENDPOINT = 'https://polynom-api.finekra.com'
 
 
 class OnlineBankStatementProviderFinekra(models.Model):

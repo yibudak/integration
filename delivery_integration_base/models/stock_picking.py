@@ -24,7 +24,9 @@ class StockPicking(models.Model):
     carrier_received_by = fields.Char("Received By", help="Received by")
     shipping_number = fields.Char("Shipping Number", help="Shipping Tracking Number")
     mail_sent = fields.Boolean("Mail Sent To Customer", default=False, copy=False)
-    delivery_payment_type = fields.Selection(related="carrier_id.payment_type", readonly=True)
+    delivery_payment_type = fields.Selection(
+        related="carrier_id.payment_type", readonly=True
+    )
 
     # Accounting fields
     sale_shipping_cost = fields.Monetary(
@@ -184,3 +186,16 @@ class StockPicking(models.Model):
                 }
             )
         return True
+
+    @api.multi
+    def _add_delivery_cost_to_so(self):
+        """
+        # Todo: compute delivery cost and add it to the sale order, odoo's function doesn't meet the requirements.
+        :return:
+        """
+        self.ensure_one()
+        return True
+        # sale_order = self.sale_id
+        # if sale_order.invoice_shipping_on_delivery:
+        #     carrier_price = self.carrier_price * (1.0 + (float(self.carrier_id.margin) / 100.0))
+        #     sale_order._create_delivery_line(self.carrier_id, carrier_price)
