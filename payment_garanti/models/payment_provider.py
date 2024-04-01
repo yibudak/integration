@@ -13,11 +13,6 @@ _logger = logging.getLogger(__name__)
 class PaymentProvider(models.Model):
     _inherit = "payment.provider"
 
-    always_pay_with_try = fields.Boolean(
-        string="Always pay with TRY",
-        help="If enabled, all transactions will be TRY currency",
-    )
-
     code = fields.Selection(
         selection_add=[("garanti", "Garanti Sanal Pos")],
         ondelete={"garanti": "set default"},
@@ -138,9 +133,9 @@ class PaymentProvider(models.Model):
 
         # If we want to get payment with TRY currency,
         # we need to convert the amount to TRY
-        if tx.currency_id != tx.company_id.currency_id and self.always_pay_with_try:
+        if tx.partner_id.country_id.code == "TR":
             amount = tx.sale_order_ids.amount_total_company_currency
-            currency = 31  # TRY
+            currency = self.env.ref("base.TRY").id
 
         connector = GarantiConnector(
             self,
