@@ -479,8 +479,12 @@ class GarantiConnector:
                 _("Payment Error: An error occurred. Please try again.")
             )
         root = etree.fromstring(resp.content)
-        reason_code = root.find(".//ReasonCode")
-        error_msg = root.find(".//ErrorMsg")
-        if reason_code.text and error_msg.text:
-            return error_msg.text
-        return True
+        order_history = root.find('.//OrderHistInqResult')
+        if order_history is None:
+            return False
+
+        if '00' in [o.text for o in order_history.findall('.//ReturnCode')]:
+            return True
+
+        else:
+            return _("Payment Error: Please try again.")
