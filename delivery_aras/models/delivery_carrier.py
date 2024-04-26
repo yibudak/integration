@@ -238,8 +238,16 @@ class DeliveryCarrier(models.Model):
         if not response:
             return False
 
+        if isinstance(response, list):
+            response = response[-1]
+
         vals = {
-            "tracking_state": response["DURUMU"] + " - " + response["DURUM_EN"],
+            "tracking_state": "%s - %s - %s"
+            % (
+                response["DURUMU"],
+                response["DURUM_EN"],
+                response.get("IADE_SEBEBI", ""),
+            ),
             "delivery_state": ARAS_OPERATION_CODES[int(response["DURUM_KODU"])][1],
             "shipping_number": response["KARGO_TAKIP_NO"],
             "carrier_shipping_cost": float(response["TUTAR"]),
