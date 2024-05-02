@@ -3,8 +3,11 @@
 
 import logging
 import json
+import os
+from urllib.parse import urlparse
 from zeep import Client, Settings
 from zeep.exceptions import Fault
+from zeep.transports import Transport
 from zeep.plugins import HistoryPlugin
 from xml.etree import ElementTree as ET
 from odoo import _
@@ -21,6 +24,47 @@ ARAS_QUERY_API_URL = {
     "prod": "https://customerservices.araskargo.com.tr/ArasCargoCustomerIntegrationService/ArasCargoIntegrationService.svc?wsdl",
     "test": "https://customerservicestest.araskargo.com.tr/ArasCargoIntegrationService.svc?singleWsdl",
 }
+
+
+class LocalSchemaTransport(Transport):
+    """
+    ref: https://github.com/mvantellingen/python-zeep/issues/1417
+    Overrides Transport to accommodate local version of schema for http://schemas.xmlsoap.org/soap/encoding/
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def load(self, url):
+        """Load the content from the given URL"""
+        if not url:
+            raise ValueError("No url given to load")
+
+        scheme = urlparse(url).scheme
+        if scheme in ("http", "https", "file"):
+
+            if self.cache:
+                response = self.cache.get(url)
+                if response:
+                    return bytes(response)
+
+            # this url was causing some issues (404 errors); it is now saved locally for fast retrieval when needed
+            if url == "http://schemas.xmlsoap.org/soap/encoding/":
+                base_dir = os.path.dirname(os.path.realpath(__file__))
+                # Save soap-encodings.xml locally in the same directory as the script.
+                soap_encodings_file = os.path.join(base_dir, "schemas.xmlsoap.org.xml")
+                with open(soap_encodings_file, "rb") as fh:
+                    return fh.read()
+
+            content = self._load_remote_data(url)
+
+            if self.cache:
+                self.cache.add(url, content)
+
+            return content
+        else:
+            with open(os.path.expanduser(url), "rb") as fh:
+                return fh.read()
 
 
 class ArasRequest:
@@ -52,11 +96,13 @@ class ArasRequest:
             wsdl=ARAS_API_URL[api_env],
             settings=settings,
             plugins=[self.history],
+            transport=LocalSchemaTransport(),
         )
         self.query_client = Client(
             wsdl=ARAS_QUERY_API_URL[api_env],
             settings=settings,
             plugins=[self.history],
+            transport=LocalSchemaTransport(),
         )
 
     def _process_reply(self, service, vals=None):
