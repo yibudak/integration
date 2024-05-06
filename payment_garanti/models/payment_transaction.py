@@ -144,7 +144,7 @@ class PaymentTransaction(models.Model):
         self.garanti_xid = notification_data.get("xid")
         md_status = notification_data.get("mdstatus")
         error_msg = notification_data.get("mderrormessage")
-        if md_status != "1":
+        if md_status not in ["1", "2", "3", "4", "5"]:
             self._set_transaction_error(error_msg)
         else:
             connector = GarantiConnector(
