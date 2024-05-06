@@ -22,8 +22,31 @@ class PaymentTransaction(models.Model):
         readonly=True,
         copy=False,
     )
-
     garanti_xid = fields.Char(string="Garanti XID", readonly=True, copy=False)
+    log_ids = fields.Many2many(
+        "ir.logging",
+        string="Logs",
+        store=False,
+        help="Logs related to the transaction",
+        compute="_compute_transaction_log_ids",
+    )
+
+    @api.multi
+    def _compute_transaction_log_ids(self):
+        for tx in self:
+            tx.log_ids = self.env["ir.logging"].search(
+                [
+                    "&",
+                    "|",
+                    "|",
+                    ("message", "ilike", tx.reference.split("-")[0]),
+                    ("message", "ilike", tx.garanti_secure3d_hash),
+                    ("message", "ilike", tx.garanti_xid),
+                    "|",
+                    ("func", "ilike", "3d"),
+                    ("func", "ilike", "garanti"),
+                ],
+            )
 
     @api.multi
     def _set_transaction_error(self, msg):
