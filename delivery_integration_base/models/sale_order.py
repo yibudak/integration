@@ -51,7 +51,7 @@ class SaleOrder(models.Model):
         store=True,
     )
 
-    # @api.depends("sale_volume", "sale_weight", "carrier_id")
+    @api.depends("sale_volume", "sale_weight", "carrier_id")
     @api.multi
     def _compute_sale_deci(self):
         for order in self:
