@@ -41,6 +41,7 @@ class PaymentTransaction(models.Model):
                     "|",
                     ("message", "ilike", tx.reference.split("-")[0]),
                     ("message", "ilike", tx.garanti_secure3d_hash),
+                    # todo: add garanti_xid exist check
                     ("message", "ilike", tx.garanti_xid),
                     "|",
                     ("func", "ilike", "3d"),
