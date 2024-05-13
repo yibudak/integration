@@ -52,6 +52,7 @@ class DeliveryCarrier(models.Model):
             (3000, "(3000)"),
             (4000, "(4000)"),
             (5000, "(5000)"),
+            (6000, "(6000)"),
         ],
         default=3000,
         required=True,
