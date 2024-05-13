@@ -1,11 +1,12 @@
 # Copyright 2023 Yiğit Budak (https://github.com/yibudak)
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
-from odoo import models, fields, _
+from odoo import models, fields, api, _
 from odoo.tools.safe_eval import safe_eval
 from odoo.exceptions import ValidationError
 from odoo.exceptions import UserError
 from odoo.tools import float_is_zero
 from datetime import timedelta, datetime
+import math
 
 
 class DeliveryCarrier(models.Model):
@@ -48,6 +49,7 @@ class DeliveryCarrier(models.Model):
             ("3000", "(3000)"),
             ("4000", "(4000)"),
             ("5000", "(5000)"),
+            ("6000", "(6000)"),
         ],
         default="3000",
         required=True,
@@ -55,6 +57,11 @@ class DeliveryCarrier(models.Model):
     weight_calc_percentage = fields.Float(
         string="additional percentage for weight calculation"
     )
+    # Default values for factor_a and factor_b is important.
+    # Do not change them unless you want to break the logarithmic calculation.
+    factor_a = fields.Float(string="Factor A", default=2.0)
+    factor_b = fields.Float(string="Factor B", default=0.1)
+
     show_in_price_table = fields.Boolean(
         string="Show in Price Table",
         help="Show this carrier in Sale Order Shipment " "Price table",
@@ -71,9 +78,9 @@ class DeliveryCarrier(models.Model):
         string="Postal Charge Percentage",
         help="For shipments below 30kg or Deci additional percentage to add",
     )
-    Emergency_fee_per_kg = fields.Float(
+    emergency_fee_per_kg = fields.Float(
         string="Emergency Charge Per Kg",
-        help="Emergency fee added after postal chargee percentage",
+        help="Emergency fee added after postal charge percentage",
     )
 
     tracking_url_prefix_no_integration = fields.Char(
@@ -87,6 +94,17 @@ class DeliveryCarrier(models.Model):
         required=True,
         help="Delivery deadline for carrier that has no integration.",
     )
+
+    @api.constrains("factor_a", "factor_b")
+    def _check_factor_values(self):
+        dp = 2
+        for carrier in self:
+            if float_is_zero(carrier.factor_a, dp) or float_is_zero(
+                carrier.factor_b, dp
+            ):
+                raise ValidationError(
+                    _("Factor A and Factor B must be greater than 0.")
+                )
 
     def _filter_rules_by_region(self, order):
         """
@@ -187,6 +205,22 @@ class DeliveryCarrier(models.Model):
             return url
         return res
 
+    def _get_dimension_factor(self, deci):
+        """
+        Calculate dimension factor based on logarithmic formula
+        :param deci: deci value
+        :return: dimension factor
+        """
+        try:
+            self.ensure_one()
+        except ValueError:
+            return 1.0
+
+        if deci < 0.5:
+            deci = 0.5
+        factor = self.factor_a - (self.factor_b * math.log10(deci))
+        return abs(factor)
+
     def _get_price_available(self, order):
         self.ensure_one()
 
@@ -194,23 +228,27 @@ class DeliveryCarrier(models.Model):
             order = self.env["sale.order"].browse(order)
 
         dp = 4  # decimal precision
-        res = order.order_line._compute_line_deci(int(self.deci_type))
-        factor = (100.0 + self.weight_calc_percentage) / 100.0
-        deci = res["deci"] * factor
-        weight = res["weight"] * factor
-        volume = res["volume"] * factor
-        # save deci in sale order
-        order.sale_deci = deci  # last deci value
-        total = (order.amount_total or 0.0) - res["total_delivery"]
+
+        deci = sum(order.order_line.mapped("deci"))
+        factor = self._get_dimension_factor(deci)
+        deci = deci * factor
+
+        weight = order.sale_weight
+        volume = order.sale_volume
+        total_delivery = sum(
+            order.order_line.filtered(lambda o: o.is_delivery).mapped("price_total")
+        )
+
+        total = (order.amount_total or 0.0) - total_delivery
         total = order.currency_id._convert(
             total,
             self.currency_id,
             order.company_id,
             order.date_order or fields.Date.today(),
         )
-
+        dummy_qty = 1.0
         price = self._get_price_from_picking(
-            total, weight, volume, res["quantity"], deci, order
+            total, weight, volume, dummy_qty, deci, order
         )
         if not float_is_zero(self.fuel_surcharge_percentage, dp):
             price = price * (self.fuel_surcharge_percentage + 100.0) / 100.0
@@ -221,8 +259,8 @@ class DeliveryCarrier(models.Model):
         if not float_is_zero(self.postal_charge_percentage, dp) and deci < 30.0:
             price = price * (self.postal_charge_percentage + 100.0) / 100.0
 
-        if not float_is_zero(self.Emergency_fee_per_kg, dp):
-            price = price + deci * self.Emergency_fee_per_kg
+        if not float_is_zero(self.emergency_fee_per_kg, dp):
+            price = price + deci * self.emergency_fee_per_kg
 
         if order.company_id.currency_id.id != self.currency_id.id:
             price = self.currency_id._convert(

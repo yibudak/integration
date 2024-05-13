@@ -37,7 +37,7 @@ class SaleOrderLine(models.Model):
         for line in self:
             carrier = line.order_id.carrier_id
             if carrier:
-                deci_type = carrier.deci_type
+                deci_type = float(carrier.deci_type)
             else:
                 deci_type = 3000
 
