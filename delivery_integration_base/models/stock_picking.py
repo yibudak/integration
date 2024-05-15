@@ -122,13 +122,15 @@ class StockPicking(models.Model):
             sale_move_lines = picking.move_lines.filtered("sale_line_id")
             for move in sale_move_lines:
                 sale_id = move.sale_line_id.order_id
+                ol = move.sale_line_id
+                ol_deci = ol.deci * sale_id.carrier_id._get_dimension_factor(ol.deci)
                 deliver_cost = sum(
                     sale_id.order_line.filtered("is_delivery").mapped("price_unit")
                 )
                 sale_deci = sale_id.sale_deci
                 if deliver_cost and sale_deci:
                     # compute weighted average
-                    total_cost += (deliver_cost / sale_deci) * move.sale_line_id.deci
+                    total_cost += (deliver_cost / sale_deci) * ol_deci
                 picking.sale_shipping_cost = total_cost
                 try_currency = sale_id.currency_id._convert(
                     total_cost,
