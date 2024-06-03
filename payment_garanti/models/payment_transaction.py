@@ -4,7 +4,7 @@ import logging
 from odoo import _, fields, models, api
 from odoo.exceptions import ValidationError
 from .garanti_connector import GarantiConnector
-from odoo.http import request
+from odoo.osv import expression
 
 # from odoo.addons.payment import utils as payment_utils
 
@@ -34,20 +34,19 @@ class PaymentTransaction(models.Model):
     @api.multi
     def _compute_transaction_log_ids(self):
         for tx in self:
-            tx.log_ids = self.env["ir.logging"].search(
-                [
-                    "&",
-                    "|",
-                    "|",
-                    ("message", "ilike", tx.reference.split("-")[0]),
-                    ("message", "ilike", tx.garanti_secure3d_hash),
-                    # todo: add garanti_xid exist check
-                    ("message", "ilike", tx.garanti_xid),
-                    "|",
-                    ("func", "ilike", "3d"),
-                    ("func", "ilike", "garanti"),
-                ],
+            domain = [("message", "ilike", tx.reference.split("-")[0])]
+            if tx.garanti_secure3d_hash:
+                domain = expression.OR(
+                    [domain, [("message", "ilike", tx.garanti_secure3d_hash)]]
+                )
+            if tx.garanti_xid:
+                domain = expression.OR([domain, [("message", "ilike", tx.garanti_xid)]])
+
+            domain = expression.AND(
+                [domain, ["|", ("func", "ilike", "3d"), ("func", "ilike", "garanti")]]
             )
+
+            tx.log_ids = self.env["ir.logging"].search(domain)
 
     @api.multi
     def _set_transaction_error(self, msg):
@@ -64,7 +63,7 @@ class PaymentTransaction(models.Model):
             error_message = (
                 self.env["payment.provider.error"]
                 .sudo()
-                .search([("error_message", "=", msg)], limit=1)
+                .search([("full_message", "=", msg)], limit=1)
             )
             if error_message and error_message.modified_error_message:
                 for tx in error_txs:

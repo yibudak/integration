@@ -116,7 +116,7 @@ class PaymentAcquirerGaranti(models.Model):
                         error_code
                         and error_message
                         and not error_obj.search_read(
-                            [("error_message", "=", error_message)], limit=1
+                            [("full_message", "=", f"{error_code}: {error_message}")], limit=1
                         )
                     ):
                         error_record = error_obj.create(

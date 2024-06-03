@@ -268,9 +268,9 @@ class GarantiConnector:
         etree.SubElement(terminal, "ProvUserID").text = self.notification_data.get(
             "terminalprovuserid"
         )
-        etree.SubElement(
-            terminal, "HashData"
-        ).text = self._garanti_compute_callback_hash_data()
+        etree.SubElement(terminal, "HashData").text = (
+            self._garanti_compute_callback_hash_data()
+        )
         etree.SubElement(terminal, "UserID").text = self.notification_data.get(
             "terminaluserid"
         )
@@ -345,9 +345,9 @@ class GarantiConnector:
         etree.SubElement(transaction, "Type").text = self.notification_data.get(
             "txntype"
         )
-        etree.SubElement(
-            transaction, "InstallmentCnt"
-        ).text = self.notification_data.get("txninstallmentcount")
+        etree.SubElement(transaction, "InstallmentCnt").text = (
+            self.notification_data.get("txninstallmentcount")
+        )
         etree.SubElement(transaction, "Amount").text = self.notification_data.get(
             "txnamount"
         )
@@ -358,9 +358,9 @@ class GarantiConnector:
         etree.SubElement(transaction, "MotoInd").text = "N"
 
         secure3d = etree.SubElement(transaction, "Secure3D")
-        etree.SubElement(
-            secure3d, "AuthenticationCode"
-        ).text = self.notification_data.get("cavv")
+        etree.SubElement(secure3d, "AuthenticationCode").text = (
+            self.notification_data.get("cavv")
+        )
         etree.SubElement(secure3d, "SecurityLevel").text = self.notification_data.get(
             "eci"
         )
@@ -415,7 +415,7 @@ class GarantiConnector:
             reason_code = root.find(".//Transaction/Response/ReasonCode").text
             message = root.find(".//Transaction/Response/Message").text
             if reason_code != "00" or message != "Approved":
-                return root.find(".//Transaction/Response/ErrorMsg").text
+                return f"{reason_code}: {root.find('.//Transaction/Response/ErrorMsg').text}"
             else:
                 return message
         except Exception:  # pylint: disable=broad-except
@@ -479,11 +479,11 @@ class GarantiConnector:
                 _("Payment Error: An error occurred. Please try again.")
             )
         root = etree.fromstring(resp.content)
-        order_history = root.find('.//OrderHistInqResult')
+        order_history = root.find(".//OrderHistInqResult")
         if order_history is None:
             return False
 
-        if '00' in [o.text for o in order_history.findall('.//ReturnCode')]:
+        if "00" in [o.text for o in order_history.findall(".//ReturnCode")]:
             return True
 
         else:
