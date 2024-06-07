@@ -9,6 +9,7 @@ from odoo.addons.payment_garanti.const import PROVISION_URL
 from odoo import _
 import requests
 import time
+import re
 
 
 class GarantiConnector:
@@ -22,6 +23,62 @@ class GarantiConnector:
         self.currency = currency
         self.card_args = card_args
         self.client_ip = client_ip
+        self.timeout = 10
+        self._session = requests.Session()
+        self._debug = self.provider.debug_logging
+
+    def _process_http_request(self, response):
+        """Log HTTP request if debugging enabled and return response.
+        :param response: Response
+        :return: Boolean
+        """
+        if not self._debug:
+            return True
+
+        def _anonymize_sensitive_data(data):
+            # Find and Replace credit cart number if exists, keep the last 4 digits
+            card_number = re.search(r"\d{16}", data)
+            if card_number:
+                data = data.replace(
+                    card_number.group(), "****" + card_number.group()[-4:]
+                )
+            return data
+
+        def _serialize_request(request):
+            return _anonymize_sensitive_data(
+                "Request: %s %s\n%s\n\n"
+                % (
+                    request.method,
+                    request.url,
+                    request.body,
+                )
+            )
+
+        def _serialize_response(resp):
+            return _anonymize_sensitive_data(
+                "Response: %s\n%s\n\n" % (resp.status_code, resp.text)
+            )
+
+        self.provider.log_xml(_serialize_request(response.request), "garanti_request")
+        self.provider.log_xml(_serialize_response(response), "garanti_response")
+
+        return True
+
+    def _garanti_requests(self, method, url, *args, **kwargs):
+        """
+        Send the request and return the response
+        """
+        with self._session as http_client:
+            response = http_client.request(
+                method=method,
+                url=url,
+                timeout=self.timeout,
+                *args,
+                **kwargs,
+            )
+            self._process_http_request(response)
+            response.raise_for_status()
+            return response
 
     @property
     def reference(self):
@@ -62,8 +119,8 @@ class GarantiConnector:
         """
         vals = self._garanti_create_payment_vals()
         try:
-            resp = requests.post(
-                self.provider._garanti_get_api_url(), params=vals, timeout=10
+            resp = self._garanti_requests(
+                "POST", self.provider._garanti_get_api_url(), params=vals
             )
             return self._garanti_parse_response_html(resp)
         except requests.RequestException:
@@ -177,9 +234,9 @@ class GarantiConnector:
         etree.SubElement(terminal, "ProvUserID").text = self.notification_data.get(
             "terminalprovuserid"
         )
-        etree.SubElement(
-            terminal, "HashData"
-        ).text = self._garanti_compute_callback_hash_data()
+        etree.SubElement(terminal, "HashData").text = (
+            self._garanti_compute_callback_hash_data()
+        )
         etree.SubElement(terminal, "UserID").text = self.notification_data.get(
             "terminaluserid"
         )
@@ -254,9 +311,9 @@ class GarantiConnector:
         etree.SubElement(transaction, "Type").text = self.notification_data.get(
             "txntype"
         )
-        etree.SubElement(
-            transaction, "InstallmentCnt"
-        ).text = self.notification_data.get("txninstallmentcount")
+        etree.SubElement(transaction, "InstallmentCnt").text = (
+            self.notification_data.get("txninstallmentcount")
+        )
         etree.SubElement(transaction, "Amount").text = self.notification_data.get(
             "txnamount"
         )
@@ -267,9 +324,9 @@ class GarantiConnector:
         etree.SubElement(transaction, "MotoInd").text = "N"
 
         secure3d = etree.SubElement(transaction, "Secure3D")
-        etree.SubElement(
-            secure3d, "AuthenticationCode"
-        ).text = self.notification_data.get("cavv")
+        etree.SubElement(secure3d, "AuthenticationCode").text = (
+            self.notification_data.get("cavv")
+        )
         etree.SubElement(secure3d, "SecurityLevel").text = self.notification_data.get(
             "eci"
         )
@@ -311,8 +368,8 @@ class GarantiConnector:
         self.notification_data = notification_data
         xml_data = self._garanti_create_callback_xml()
         try:
-            resp = requests.post(
-                PROVISION_URL, data=xml_data.decode("utf-8"), timeout=10
+            resp = self._garanti_requests(
+                "POST", PROVISION_URL, data=xml_data.decode("utf-8")
             )
         except requests.RequestException:
             raise ValidationError(_("Payment Error. Please contact us."))
@@ -322,7 +379,7 @@ class GarantiConnector:
             reason_code = root.find(".//Transaction/Response/ReasonCode").text
             message = root.find(".//Transaction/Response/Message").text
             if reason_code != "00" or message != "Approved":
-                return root.find(".//Transaction/Response/ErrorMsg").text
+                return f"{reason_code}: {root.find('.//Transaction/Response/ErrorMsg').text}"
             else:
                 return message
         except Exception:  # pylint: disable=broad-except

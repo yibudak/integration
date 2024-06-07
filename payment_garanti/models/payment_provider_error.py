@@ -12,8 +12,18 @@ class PaymentProviderError(models.Model):
     sys_error_message = fields.Text("System Error Message")
     log_id = fields.Many2one("ir.logging", string="Log")
     modified_error_message = fields.Text("Modified Error Message", translate=True)
+    full_message = fields.Text(
+        string="Full Message",
+        store=True,
+        compute="_compute_full_message",
+    )
 
     @api.onchange("error_message")
     def _onchange_error_message(self):
         for error in self:
             error.modified_error_message = error.error_message
+
+    @api.depends("error_code", "error_message")
+    def _compute_full_message(self):
+        for record in self:
+            record.full_message = f"{record.error_code}: {record.error_message}"

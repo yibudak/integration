@@ -1,8 +1,9 @@
 # Copyright 2022 Yiğit Budak (https://github.com/yibudak)
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 import logging
-import requests
-from odoo import _, fields, models
+import re
+import psycopg2
+from odoo import api, fields, models, registry, SUPERUSER_ID, _
 from odoo.exceptions import ValidationError
 from .garanti_connector import GarantiConnector
 from odoo.addons.payment_garanti.const import TEST_URL, PROD_URL, CURRENCY_CODES
@@ -52,6 +53,79 @@ class PaymentProvider(models.Model):
         required_if_provider="garanti",
         groups="base.group_user",
     )
+
+    debug_logging = fields.Boolean(
+        "Debug logging", help="Log requests in order to ease debugging"
+    )
+
+    def log_xml(self, xml_string, func):
+        self.ensure_one()
+
+        if self.debug_logging:
+            db_name = self._cr.dbname
+            # Use a new cursor to avoid rollback that could be caused by an upper method
+            try:
+                db_registry = registry(db_name)
+                with db_registry.cursor() as cr:
+                    env = api.Environment(cr, SUPERUSER_ID, {})
+                    IrLogging = env["ir.logging"]
+                    created_log = IrLogging.sudo().create(
+                        {
+                            "name": "payment.acquirer",
+                            "type": "server",
+                            "dbname": db_name,
+                            "level": "DEBUG",
+                            "message": str(xml_string),
+                            "path": self.code,
+                            "func": func,
+                            "line": 1,
+                        }
+                    )
+                    """
+                    Save the error message to the database, so we can handle
+                    the error message better.
+                    """
+                    error_obj = env["payment.provider.error"].sudo()
+                    error_code = False
+                    error_message = False
+                    sys_error_message = False
+                    # It means that the request has been made by return endpoint
+                    if isinstance(xml_string, dict):
+                        error_code = xml_string.get("mdstatus", False)
+                        error_message = xml_string.get("mderrormessage", False)
+                    else:
+                        reason_code = re.findall(
+                            r"<ReasonCode>(\d+)</ReasonCode>", xml_string
+                        )
+                        xml_msg = re.findall(r"<ErrorMsg>(.*?)</ErrorMsg>", xml_string)
+                        sys_error_msg = re.findall(
+                            r"<SysErrMsg>(.*?)</SysErrMsg>", xml_string
+                        )
+                        if reason_code and xml_msg:
+                            error_code = reason_code[0]
+                            error_message = xml_msg[0]
+                            if sys_error_msg:
+                                sys_error_message = sys_error_msg[0]
+
+                    if (
+                        error_code
+                        and error_message
+                        and not error_obj.search_read(
+                            [("full_message", "=", f"{error_code}: {error_message}")],
+                            limit=1,
+                        )
+                    ):
+                        error_record = error_obj.create(
+                            {
+                                "error_code": error_code,
+                                "sys_error_message": sys_error_message,
+                                "error_message": error_message,
+                                "log_id": created_log.id,
+                            }
+                        )
+                        error_record._onchange_error_message()
+            except psycopg2.Error:
+                pass
 
     def _garanti_get_api_url(self):
         """Return the API URL according to the provider state.
