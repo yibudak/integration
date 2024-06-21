@@ -31,10 +31,11 @@ class GarantiConnector:
         """
         Garanti Sanal Pos API expects client IP address in IPv4 format.
         """
-        if ":" in client_ip:
-            return "127.0.0.1"
-        else:
+        default_ip = "127.0.0.1"
+        if client_ip and ":" not in client_ip:
             return client_ip
+        else:
+            return default_ip
 
     def _process_http_request(self, response):
         """Log HTTP request if debugging enabled and return response.
