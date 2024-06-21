@@ -23,7 +23,7 @@ class GarantiConnector:
         self.amount = self._get_amount(amount)
         self.currency_id = self._get_currency_id()
         self.card_args = card_args
-        self.client_ip = client_ip
+        self.client_ip = self._get_ip_address(client_ip)
         self.timeout = 10
         self._session = requests.Session()
         self._debug = self.provider.debug_logging
@@ -39,6 +39,15 @@ class GarantiConnector:
         :return:
         """
         return self.tx.reference.split("-")[0]
+
+    def _get_ip_address(self, client_ip):
+        """
+        Garanti Sanal Pos API expects client IP address in IPv4 format.
+        """
+        if ":" in client_ip:
+            return "127.0.0.1"
+        else:
+            return client_ip
 
     def _get_partner_email(self):
         """
