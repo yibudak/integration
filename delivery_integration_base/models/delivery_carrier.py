@@ -223,10 +223,11 @@ class DeliveryCarrier(models.Model):
 
     def _get_price_available(self, order):
         self.ensure_one()
-
         if isinstance(order, int):
             order = self.env["sale.order"].browse(order)
 
+        order = order.with_context(rate_carrier_id=self.id)  # Do not lose context
+        order.order_line.invalidate_model()  # invalidate cache to recompute order line deci
         dp = 4  # decimal precision
 
         deci = sum(order.order_line.mapped("deci"))

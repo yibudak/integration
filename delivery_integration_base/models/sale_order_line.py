@@ -36,7 +36,12 @@ class SaleOrderLine(models.Model):
     def _compute_deci(self):
         for line in self:
             carrier = line.order_id.carrier_id
-            if carrier:
+            if self._context.get("rate_carrier_id"):
+                carrier = self.env["delivery.carrier"].browse(
+                    self._context.get("carrier_id")
+                )
+                deci_type = float(carrier.deci_type)
+            elif carrier:
                 deci_type = float(carrier.deci_type)
             else:
                 deci_type = 3000
