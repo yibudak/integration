@@ -107,7 +107,11 @@ class PaymentTransaction(models.Model):
         self.garanti_xid = notification_data.get("xid")
         md_status = notification_data.get("mdstatus")
         error_msg = notification_data.get("mderrormessage")
-        if md_status not in ["1", "2", "3", "4", "5"]:
+        if md_status not in ["1", "2", "3", "4", "5"] and not (
+            md_status == "0"  # this case is for non-3D enabled foreign customers
+            and self.partner_id.country_id
+            and self.partner_id.country_id.id != 224
+        ):
             _logger.warning(
                 "the transaction with reference %s underwent an error." " reason: %s",
                 self.reference,
