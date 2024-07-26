@@ -100,7 +100,8 @@ class GarantiConnector:
         return self.tx.reference.split("-")[0]
 
     def _get_email(self):
-        return self.tx.partner_email.split(",")[0]
+        single_mail = self.tx.partner_email.split(",")[0]
+        return single_mail.replace("+", "")
 
     def _garanti_parse_response_html(self, response):
         """Parse response HTML from Garanti Sanal Pos API.
@@ -183,7 +184,7 @@ class GarantiConnector:
             "clientid": self.provider.garanti_terminal_id,
             "terminalmerchantid": self.provider.garanti_merchant_id,
             "customeripaddress": self.client_ip,
-            "customeremailaddress": self.tx.partner_id.email,
+            "customeremailaddress": self._get_email(),
             "card_number": card_args.get("card_number").replace(" ", ""),
             "card_cvv": card_args.get("card_cvv"),
             "card_name": card_args.get("card_name"),
