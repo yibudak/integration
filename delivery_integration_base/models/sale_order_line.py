@@ -38,7 +38,7 @@ class SaleOrderLine(models.Model):
             carrier = line.order_id.carrier_id
             if self._context.get("rate_carrier_id"):
                 carrier = self.env["delivery.carrier"].browse(
-                    self._context.get("carrier_id")
+                    self._context.get("rate_carrier_id")
                 )
                 deci_type = float(carrier.deci_type)
             elif carrier:
