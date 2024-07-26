@@ -176,6 +176,31 @@ class GarantiConnector:
         else:
             return "en"
 
+    def _build_notification_data_for_non_3ds_payment(self, card_args):
+        return {
+            "terminalprovuserid": self.provider.garanti_prov_user,
+            "terminaluserid": self.provider.garanti_terminal_id,
+            "clientid": self.provider.garanti_terminal_id,
+            "terminalmerchantid": self.provider.garanti_merchant_id,
+            "customeripaddress": self.client_ip,
+            "customeremailaddress": self.tx.partner_id.email,
+            "card_number": card_args.get("card_number").replace(" ", ""),
+            "card_cvv": card_args.get("card_cvv"),
+            "card_name": card_args.get("card_name"),
+            "card_expire": "%s%s"
+            % (
+                card_args.get("card_valid_month").zfill(2),
+                card_args.get("card_valid_year")[2:],
+            ),
+            "oid": self.reference,
+            "txntype": "sales",
+            "txninstallmentcount": "",
+            "txnamount": str(self.amount),
+            "txncurrencycode": self.provider._garanti_get_currency_code(self.currency),
+            "non_3ds": True,
+            "mdstatus": "1",
+        }
+
     def _garanti_create_payment_vals(self):
         """Create parameters for Garanti Sanal Pos API.
 
@@ -225,12 +250,16 @@ class GarantiConnector:
         :return: Hash data
         """
         hash_data = (
-            str(self.notification_data.get("oid"))
-            + str(self.notification_data.get("clientid"))  # orderid
-            + str(self.notification_data.get("txnamount"))  # clientid
-            +  # txnamount
-            # str(self.notification_data.get('txncurrencycode')) +  # txncurrencycode
-            str(self._garanti_compute_security_data())  # securitydata
+            str(self.notification_data.get("oid"))  # Order ID
+            + str(self.notification_data.get("terminaluserid"))  # Terminal User ID
+            + "%s"
+            % (
+                self.notification_data.get("card_number")
+                if self.notification_data.get("non_3ds")
+                else ""
+            )  # Card Number
+            + str(self.notification_data.get("txnamount"))  # Transaction Amount
+            + str(self._garanti_compute_security_data())  # Security Data
         )
         return sha1(hash_data.encode("utf-8")).hexdigest().upper()
 
@@ -278,9 +307,18 @@ class GarantiConnector:
         :return: Card node
         """
         card = etree.SubElement(gvps_request, "Card")
-        etree.SubElement(card, "Number").text = ""
-        etree.SubElement(card, "ExpireDate").text = ""
-        etree.SubElement(card, "CVV2").text = ""
+        if self.notification_data.get("non_3ds"):
+            etree.SubElement(card, "Number").text = self.notification_data.get(
+                "card_number"
+            )
+            etree.SubElement(card, "ExpireDate").text = self.notification_data.get(
+                "card_expire"
+            )
+            etree.SubElement(card, "CVV2").text = self.notification_data.get("card_cvv")
+        else:
+            etree.SubElement(card, "Number").text = ""
+            etree.SubElement(card, "ExpireDate").text = ""
+            etree.SubElement(card, "CVV2").text = ""
         return True
 
     def _garanti_address_list_node(self, order_node):
@@ -330,18 +368,20 @@ class GarantiConnector:
         etree.SubElement(transaction, "CurrencyCode").text = self.notification_data.get(
             "txncurrencycode"
         )
-        etree.SubElement(transaction, "CardholderPresentCode").text = "13"
+        etree.SubElement(transaction, "CardholderPresentCode").text = (
+            "0" if self.notification_data.get("non_3ds") else "13"
+        )
         etree.SubElement(transaction, "MotoInd").text = "N"
-
-        secure3d = etree.SubElement(transaction, "Secure3D")
-        etree.SubElement(secure3d, "AuthenticationCode").text = (
-            self.notification_data.get("cavv")
-        )
-        etree.SubElement(secure3d, "SecurityLevel").text = self.notification_data.get(
-            "eci"
-        )
-        etree.SubElement(secure3d, "TxnID").text = self.notification_data.get("xid")
-        etree.SubElement(secure3d, "Md").text = self.notification_data.get("md")
+        if not self.notification_data.get("non_3ds"):
+            secure3d = etree.SubElement(transaction, "Secure3D")
+            etree.SubElement(secure3d, "AuthenticationCode").text = (
+                self.notification_data.get("cavv")
+            )
+            etree.SubElement(secure3d, "SecurityLevel").text = (
+                self.notification_data.get("eci")
+            )
+            etree.SubElement(secure3d, "TxnID").text = self.notification_data.get("xid")
+            etree.SubElement(secure3d, "Md").text = self.notification_data.get("md")
         return True
 
     def _garanti_create_callback_xml(self):

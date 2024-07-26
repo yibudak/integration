@@ -219,13 +219,23 @@ class PaymentProvider(models.Model):
             card_args,
             client_ip,
         )
-        method, resp = connector._garanti_make_payment_request()
 
-        return {
-            "status": "success",
-            "method": method,
-            "response": resp,
-        }
+        if tx.partner_id.country_id and tx.partner_id.country_id.code != "TR":
+            notification_data = connector._build_notification_data_for_non_3ds_payment(
+                card_args=card_args
+            )
+            tx._process_notification_data(notification_data)
+            return {
+                "status": "success",
+                "method": "non_3ds",
+            }
+        else:
+            method, resp = connector._garanti_make_payment_request()
+            return {
+                "status": "success",
+                "method": method,
+                "response": resp,
+            }
 
     def _garanti_validate_card_args(self, card_args):
         """
