@@ -81,7 +81,7 @@
                                 </label>
                                 <div class="input-group">
                                     <input type="text" name="cardCVV"
-                                           maxlength="3"
+                                           maxlength="4"
                                            class="form-control"/>
                                 </div>
                             </div>

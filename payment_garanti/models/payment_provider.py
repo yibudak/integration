@@ -246,7 +246,7 @@ class PaymentProvider(models.Model):
         error = ""
         card_number = card_args.get("card_number")
         card_cvv = card_args.get("card_cvv")
-        if not card_number or len(card_number) < 16:
+        if not card_number or len(card_number) < 15:
             error += _("Card number is not valid.\n")
 
         if not card_cvv or len(card_cvv) < 3:
