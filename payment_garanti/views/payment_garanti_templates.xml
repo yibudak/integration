@@ -101,7 +101,7 @@
                                         </h6>
                                     </label>
                                     <div class="input-group">
-                                        <input type="text" name="cc_cvc" id="cc_cvc" class="form-control" maxlength="3"
+                                        <input type="text" name="cc_cvc" id="cc_cvc" class="form-control" maxlength="4"
                                                placeholder="CVC" data-is-required="true"/>
                                     </div>
                                 </div>
