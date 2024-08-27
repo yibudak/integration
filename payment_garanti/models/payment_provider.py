@@ -180,7 +180,7 @@ class PaymentProvider(models.Model):
         :return: The formatted card number
         """
         card_number = card_number.replace(" ", "")
-        if len(card_number) == 16 and card_number.isdigit():
+        if len(card_number) in [15, 16] and card_number.isdigit():
             return card_number
         else:
             raise ValidationError(_("Card number is not valid."))
