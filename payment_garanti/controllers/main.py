@@ -82,15 +82,20 @@ class GarantiController(http.Controller):
         client_ip = request.httprequest.environ.get("REMOTE_ADDR")
 
         # Get the payment response, it can be a redirect or a form
+        response_content = None
         try:
             response_content = acq.sudo()._garanti_make_payment_request(
                 tx_sudo, amount, card_args, client_ip
             )
         except Exception as e:
+            _logger.error(e)
             tx_sudo._set_transaction_error(_("Payment Error. Please contact us."))
         # Save the transaction in the session
         PaymentProcessing.add_payment_transaction(tx_sudo)
-        return response_content
+        if not response_content:
+            redirect(order_sudo.get_portal_url())
+        else:
+            return response_content
 
     @http.route(
         _return_url,
@@ -115,8 +120,10 @@ class GarantiController(http.Controller):
                 raise ValidationError(_("Transaction not completed"))
         except Exception as e:
             if kwargs.get("orderid"):
-                order = request.env["sale.order"].sudo().search(
-                    [("name", "=", kwargs.get("orderid"))]
+                order = (
+                    request.env["sale.order"]
+                    .sudo()
+                    .search([("name", "=", kwargs.get("orderid"))])
                 )
                 if order:
                     return redirect(order.get_portal_url())
