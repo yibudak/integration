@@ -9,6 +9,7 @@ from odoo.addons.payment_garanti.const import PROVISION_URL
 from odoo import _
 import requests
 import time
+import re
 
 
 class GarantiConnector:
@@ -21,7 +22,73 @@ class GarantiConnector:
         )  # Garanti API expects amount in kuruş.
         self.currency = currency
         self.card_args = card_args
-        self.client_ip = client_ip
+        self.client_ip = self._get_ip_address(client_ip)
+        self.timeout = 10
+        self._session = requests.Session()
+        self._debug = self.provider.debug_logging
+
+    def _get_ip_address(self, client_ip):
+        """
+        Garanti Sanal Pos API expects client IP address in IPv4 format.
+        """
+        default_ip = "127.0.0.1"
+        if client_ip and ":" not in client_ip:
+            return client_ip
+        else:
+            return default_ip
+
+    def _process_http_request(self, response):
+        """Log HTTP request if debugging enabled and return response.
+        :param response: Response
+        :return: Boolean
+        """
+        if not self._debug:
+            return True
+
+        def _anonymize_sensitive_data(data):
+            # Find and Replace credit cart number if exists, keep the last 4 digits
+            card_number = re.search(r"\d{16}", data)
+            if card_number:
+                data = data.replace(
+                    card_number.group(), "****" + card_number.group()[-4:]
+                )
+            return data
+
+        def _serialize_request(request):
+            return _anonymize_sensitive_data(
+                "Request: %s %s\n%s\n\n"
+                % (
+                    request.method,
+                    request.url,
+                    request.body,
+                )
+            )
+
+        def _serialize_response(resp):
+            return _anonymize_sensitive_data(
+                "Response: %s\n%s\n\n" % (resp.status_code, resp.text)
+            )
+
+        self.provider.log_xml(_serialize_request(response.request), "garanti_request")
+        self.provider.log_xml(_serialize_response(response), "garanti_response")
+
+        return True
+
+    def _garanti_requests(self, method, url, *args, **kwargs):
+        """
+        Send the request and return the response
+        """
+        with self._session as http_client:
+            response = http_client.request(
+                method=method,
+                url=url,
+                timeout=self.timeout,
+                *args,
+                **kwargs,
+            )
+            self._process_http_request(response)
+            response.raise_for_status()
+            return response
 
     @property
     def reference(self):
@@ -32,6 +99,10 @@ class GarantiConnector:
         """
         return self.tx.reference.split("-")[0]
 
+    def _get_email(self):
+        single_mail = self.tx.partner_email.split(",")[0]
+        return single_mail.replace("+", "")
+
     def _garanti_parse_response_html(self, response):
         """Parse response HTML from Garanti Sanal Pos API.
 
@@ -41,11 +112,7 @@ class GarantiConnector:
         soup = BeautifulSoup(response.text, "html.parser")
         error_msg = soup.find("input", {"name": "mderrormessage"})
         if error_msg:
-            if error_msg["value"] == "Not Authenticated":
-                raise ValidationError(
-                    _("Payment failed." " Garanti: Card is not authenticated.")
-                )
-            raise ValidationError(_("Garanti Sanal Pos Error: %s") % error_msg["value"])
+            raise ValidationError(error_msg["value"])
 
         form = soup.find("form", {"id": "webform0"})
 
@@ -63,12 +130,12 @@ class GarantiConnector:
         """
         vals = self._garanti_create_payment_vals()
         try:
-            resp = requests.post(
-                self.provider._garanti_get_api_url(), params=vals, timeout=10
+            resp = self._garanti_requests(
+                "POST", self.provider._garanti_get_api_url(), params=vals
             )
             return self._garanti_parse_response_html(resp)
         except requests.RequestException:
-            raise ValidationError(_("Garanti: An error occurred. Please try again."))
+            raise ValidationError(_("Payment Error. Please contact us."))
 
     def _garanti_compute_security_data(self):
         return (
@@ -110,6 +177,31 @@ class GarantiConnector:
         else:
             return "en"
 
+    def _build_notification_data_for_non_3ds_payment(self, card_args):
+        return {
+            "terminalprovuserid": self.provider.garanti_prov_user,
+            "terminaluserid": self.provider.garanti_terminal_id,
+            "clientid": self.provider.garanti_terminal_id,
+            "terminalmerchantid": self.provider.garanti_merchant_id,
+            "customeripaddress": self.client_ip,
+            "customeremailaddress": self._get_email(),
+            "card_number": card_args.get("card_number").replace(" ", ""),
+            "card_cvv": card_args.get("card_cvv"),
+            "card_name": card_args.get("card_name"),
+            "card_expire": "%s%s"
+            % (
+                card_args.get("card_valid_month").zfill(2),
+                card_args.get("card_valid_year")[2:],
+            ),
+            "oid": self.reference,
+            "txntype": "sales",
+            "txninstallmentcount": "",
+            "txnamount": str(self.amount),
+            "txncurrencycode": self.provider._garanti_get_currency_code(self.currency),
+            "non_3ds": True,
+            "mdstatus": "1",
+        }
+
     def _garanti_create_payment_vals(self):
         """Create parameters for Garanti Sanal Pos API.
 
@@ -137,7 +229,7 @@ class GarantiConnector:
             "terminalid": self.provider.garanti_terminal_id,
             "terminalmerchantid": self.provider.garanti_merchant_id,
             "orderid": self.reference,
-            "customeremailaddress": self.tx.partner_email,
+            "customeremailaddress": self._get_email(),
             "customeripaddress": self.client_ip,
             "txnamount": str(self.amount),
             "txncurrencycode": self.provider._garanti_get_currency_code(self.currency),
@@ -159,12 +251,16 @@ class GarantiConnector:
         :return: Hash data
         """
         hash_data = (
-            str(self.notification_data.get("oid"))
-            + str(self.notification_data.get("clientid"))  # orderid
-            + str(self.notification_data.get("txnamount"))  # clientid
-            +  # txnamount
-            # str(self.notification_data.get('txncurrencycode')) +  # txncurrencycode
-            str(self._garanti_compute_security_data())  # securitydata
+            str(self.notification_data.get("oid"))  # Order ID
+            + str(self.notification_data.get("terminaluserid"))  # Terminal User ID
+            + "%s"
+            % (
+                self.notification_data.get("card_number")
+                if self.notification_data.get("non_3ds")
+                else ""
+            )  # Card Number
+            + str(self.notification_data.get("txnamount"))  # Transaction Amount
+            + str(self._garanti_compute_security_data())  # Security Data
         )
         return sha1(hash_data.encode("utf-8")).hexdigest().upper()
 
@@ -178,9 +274,9 @@ class GarantiConnector:
         etree.SubElement(terminal, "ProvUserID").text = self.notification_data.get(
             "terminalprovuserid"
         )
-        etree.SubElement(
-            terminal, "HashData"
-        ).text = self._garanti_compute_callback_hash_data()
+        etree.SubElement(terminal, "HashData").text = (
+            self._garanti_compute_callback_hash_data()
+        )
         etree.SubElement(terminal, "UserID").text = self.notification_data.get(
             "terminaluserid"
         )
@@ -212,9 +308,18 @@ class GarantiConnector:
         :return: Card node
         """
         card = etree.SubElement(gvps_request, "Card")
-        etree.SubElement(card, "Number").text = ""
-        etree.SubElement(card, "ExpireDate").text = ""
-        etree.SubElement(card, "CVV2").text = ""
+        if self.notification_data.get("non_3ds"):
+            etree.SubElement(card, "Number").text = self.notification_data.get(
+                "card_number"
+            )
+            etree.SubElement(card, "ExpireDate").text = self.notification_data.get(
+                "card_expire"
+            )
+            etree.SubElement(card, "CVV2").text = self.notification_data.get("card_cvv")
+        else:
+            etree.SubElement(card, "Number").text = ""
+            etree.SubElement(card, "ExpireDate").text = ""
+            etree.SubElement(card, "CVV2").text = ""
         return True
 
     def _garanti_address_list_node(self, order_node):
@@ -255,27 +360,29 @@ class GarantiConnector:
         etree.SubElement(transaction, "Type").text = self.notification_data.get(
             "txntype"
         )
-        etree.SubElement(
-            transaction, "InstallmentCnt"
-        ).text = self.notification_data.get("txninstallmentcount")
+        etree.SubElement(transaction, "InstallmentCnt").text = (
+            self.notification_data.get("txninstallmentcount")
+        )
         etree.SubElement(transaction, "Amount").text = self.notification_data.get(
             "txnamount"
         )
         etree.SubElement(transaction, "CurrencyCode").text = self.notification_data.get(
             "txncurrencycode"
         )
-        etree.SubElement(transaction, "CardholderPresentCode").text = "13"
-        etree.SubElement(transaction, "MotoInd").text = "N"
-
-        secure3d = etree.SubElement(transaction, "Secure3D")
-        etree.SubElement(
-            secure3d, "AuthenticationCode"
-        ).text = self.notification_data.get("cavv")
-        etree.SubElement(secure3d, "SecurityLevel").text = self.notification_data.get(
-            "eci"
+        etree.SubElement(transaction, "CardholderPresentCode").text = (
+            "0" if self.notification_data.get("non_3ds") else "13"
         )
-        etree.SubElement(secure3d, "TxnID").text = self.notification_data.get("xid")
-        etree.SubElement(secure3d, "Md").text = self.notification_data.get("md")
+        etree.SubElement(transaction, "MotoInd").text = "N"
+        if not self.notification_data.get("non_3ds"):
+            secure3d = etree.SubElement(transaction, "Secure3D")
+            etree.SubElement(secure3d, "AuthenticationCode").text = (
+                self.notification_data.get("cavv")
+            )
+            etree.SubElement(secure3d, "SecurityLevel").text = (
+                self.notification_data.get("eci")
+            )
+            etree.SubElement(secure3d, "TxnID").text = self.notification_data.get("xid")
+            etree.SubElement(secure3d, "Md").text = self.notification_data.get("md")
         return True
 
     def _garanti_create_callback_xml(self):
@@ -312,22 +419,19 @@ class GarantiConnector:
         self.notification_data = notification_data
         xml_data = self._garanti_create_callback_xml()
         try:
-            resp = requests.post(
-                PROVISION_URL, data=xml_data.decode("utf-8"), timeout=10
+            resp = self._garanti_requests(
+                "POST", PROVISION_URL, data=xml_data.decode("utf-8")
             )
         except requests.RequestException:
-            raise ValidationError(_("Garanti: Error. Please try again."))
+            raise ValidationError(_("Payment Error. Please contact us."))
 
         try:
             root = etree.fromstring(resp.content)
             reason_code = root.find(".//Transaction/Response/ReasonCode").text
             message = root.find(".//Transaction/Response/Message").text
             if reason_code != "00" or message != "Approved":
-                return (
-                    _("Payment Error: %s")
-                    % root.find(".//Transaction/Response/ErrorMsg").text
-                )
+                return f"{reason_code}: {root.find('.//Transaction/Response/ErrorMsg').text}"
             else:
                 return message
         except Exception:  # pylint: disable=broad-except
-            raise ValidationError(_("Garanti: Timeout. Please try again."))
+            raise ValidationError(_("Payment Error. Please contact us."))

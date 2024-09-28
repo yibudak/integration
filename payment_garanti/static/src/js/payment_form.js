@@ -80,6 +80,9 @@ odoo.define('payment_garanti.payment_form', require => {
                         $("#payment_method").append(paymentResponse.response);
                         $("#webform0").submit();
                     }
+                    else if (paymentResponse.method === 'non_3ds') {
+                        window.location.href = '/payment/status';
+                    }
                     else {
                         // https://stackoverflow.com/questions/1236360/how-do-i-replace-the-entire-html-node-using-jquery
                         let redirectPage = document.open("text/html", "replace");

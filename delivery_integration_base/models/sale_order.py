@@ -30,7 +30,38 @@ class SaleOrder(models.Model):
     sale_deci = fields.Float(
         string="Sale Deci",
         digits=dp.get_precision("Product Unit of Measure"),
+        compute="_compute_sale_deci",
+        store=True,
     )
+
+    sale_volume = fields.Float(
+        string="Net Sale Volume",
+        digits=dp.get_precision("Product Unit of Measure"),
+        compute="_compute_net_sale_weight_volume",
+        store=True,
+    )
+
+    sale_weight = fields.Float(
+        string="Net Sale Weight",
+        digits=dp.get_precision("Product Unit of Measure"),
+        compute="_compute_net_sale_weight_volume",
+        store=True,
+    )
+
+    @api.depends("sale_volume", "sale_weight", "carrier_id")
+    def _compute_sale_deci(self):
+        for order in self:
+            carrier = order.carrier_id
+            deci = sum(order.order_line.mapped("deci"))
+            factor = carrier._get_dimension_factor(deci)
+            order.sale_deci = deci * factor
+
+    @api.depends("order_line", "order_line.volume", "order_line.weight")
+    def _compute_net_sale_weight_volume(self):
+        for order in self:
+            order_lines = order.order_line
+            order.sale_volume = sum(order_lines.mapped("volume"))
+            order.sale_weight = sum(order_lines.mapped("weight"))
 
     # @api.multi
     # def action_confirm(self):

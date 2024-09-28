@@ -3,6 +3,7 @@
 import logging
 from odoo import _, fields, models
 from odoo.exceptions import ValidationError
+from odoo.osv import expression
 from .garanti_connector import GarantiConnector
 from odoo.addons.payment import utils as payment_utils
 
@@ -20,8 +21,49 @@ class PaymentTransaction(models.Model):
         readonly=True,
         copy=False,
     )
-
     garanti_xid = fields.Char(string="Garanti XID", readonly=True, copy=False)
+    log_ids = fields.Many2many(
+        "ir.logging",
+        string="Logs",
+        store=False,
+        help="Logs related to the transaction",
+        compute="_compute_transaction_log_ids",
+    )
+
+    def _compute_transaction_log_ids(self):
+        for tx in self:
+            domain = [("message", "ilike", tx.reference.split("-")[0])]
+            if tx.garanti_secure3d_hash:
+                domain = expression.OR(
+                    [domain, [("message", "ilike", tx.garanti_secure3d_hash)]]
+                )
+            if tx.garanti_xid:
+                domain = expression.OR([domain, [("message", "ilike", tx.garanti_xid)]])
+
+            domain = expression.AND(
+                [domain, ["|", ("func", "ilike", "3d"), ("func", "ilike", "garanti")]]
+            )
+
+            tx.log_ids = self.env["ir.logging"].search(domain)
+
+    def _set_error(self, state_message):
+        # Todo: finish this method
+        res = super()._set_error(state_message)
+        error_txs = self.filtered(
+            lambda t: t.provider_id.code == "garanti" and t.state == "error"
+        )
+        if error_txs:
+            error_message = (
+                self.env["payment.provider.error"]
+                .sudo()
+                .search([("full_message", "=", state_message)], limit=1)
+            )
+            if error_message and error_message.modified_error_message:
+                for tx in error_txs:
+                    tx.state_message = error_message.with_context(
+                        lang=tx.partner_id.lang or "tr_TR"
+                    ).modified_error_message
+        return res
 
     # === BUSINESS METHODS ===#
 
@@ -59,17 +101,19 @@ class PaymentTransaction(models.Model):
         if self.provider_code != "garanti":
             return
 
+        self.provider_id.log_xml(notification_data, "3ds_return")
+
         self.operation = "online_redirect"
         self.garanti_xid = notification_data.get("xid")
         md_status = notification_data.get("mdstatus")
         error_msg = notification_data.get("mderrormessage")
-        if md_status != "1":
+        if md_status not in ["1", "2", "3", "4", "5"]:
             _logger.warning(
                 "the transaction with reference %s underwent an error." " reason: %s",
                 self.reference,
                 error_msg,
             )
-            self._set_error(_("Payment failed: %s" % error_msg))
+            self._set_error(f"{md_status}: {error_msg}")
         else:
             connector = GarantiConnector(
                 self.provider_id,
@@ -82,14 +126,14 @@ class PaymentTransaction(models.Model):
                 if res == "Approved":
                     self._set_done()
                 else:
-                    self._set_error(_("Payment failed. %s" % res))
+                    self._set_error(res)
             except Exception as e:
                 _logger.warning(
                     "Garanti payment callback error: %s, data: %s",
                     (e, notification_data),
                     exc_info=True,
                 )
-                self._set_error(_("Payment failed. %s" % res))
+                self._set_error(res)
 
     def _get_tx_from_notification_data(self, provider_code, notification_data):
         """Override of payment to find the transaction based on Garanti data.
