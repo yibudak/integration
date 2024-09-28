@@ -61,7 +61,9 @@ class OTPRequest(models.TransientModel):
                 params={
                     "api_key": api_key,
                     "mobile": self.mobile_number,
-                    # "lang": 0,  # English, only this one is suppsorted for now
+                    "lang": (
+                        1 if self.user_lang == "tr_TR" else 2
+                    ),  # 1 Turkish, 2 English
                     "response_type": "json",  # json or php array
                 },
             )
