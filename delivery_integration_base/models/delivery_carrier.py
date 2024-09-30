@@ -49,12 +49,12 @@ class DeliveryCarrier(models.Model):
     deci_type = fields.Selection(
         string="Deci Type",
         selection=[
-            (3000, "(3000)"),
-            (4000, "(4000)"),
-            (5000, "(5000)"),
-            (6000, "(6000)"),
+            ("3000", "(3000)"),
+            ("4000", "(4000)"),
+            ("5000", "(5000)"),
+            ("6000", "(6000)"),
         ],
-        default=3000,
+        default="3000",
         required=True,
     )
     weight_calc_percentage = fields.Float(

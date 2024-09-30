@@ -7,7 +7,7 @@
     "website": "https://github.com/odoo-turkey/integration",
     "license": "AGPL-3",
     "category": "Delivery",
-    "version": "12.0.1.1.0",
+    "version": "13.0.1.1.0",
     "depends": [
         "delivery",
         "l10n_tr_address",

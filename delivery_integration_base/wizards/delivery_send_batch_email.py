@@ -7,7 +7,6 @@ class DeliverySendBatchEmail(models.TransientModel):
     _name = "delivery.send.batch.email"
     _description = "Send Batch Email to Customers"
 
-    @api.multi
     def send_batch_email(self):
         context = dict(self._context or {})
         active_ids = context.get('active_ids', []) or []

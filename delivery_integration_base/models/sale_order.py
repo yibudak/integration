@@ -30,13 +30,6 @@ class SaleOrder(models.Model):
         readonly=True,
     )
 
-    sale_deci = fields.Float(
-        string="Sale Deci",
-        digits=dp.get_precision("Product Unit of Measure"),
-        compute="_compute_sale_deci",
-        store=True,
-    )
-
     sale_volume = fields.Float(
         string="Net Sale Volume",
         digits=dp.get_precision("Product Unit of Measure"),
@@ -51,8 +44,14 @@ class SaleOrder(models.Model):
         store=True,
     )
 
+    sale_deci = fields.Float(
+        string="Sale Deci",
+        digits=dp.get_precision("Product Unit of Measure"),
+        compute="_compute_sale_deci",
+        store=True,
+    )
+
     @api.depends("sale_volume", "sale_weight", "carrier_id")
-    @api.multi
     def _compute_sale_deci(self):
         for order in self:
             carrier = order.carrier_id
@@ -67,7 +66,6 @@ class SaleOrder(models.Model):
             order.sale_volume = sum(order_lines.mapped("volume"))
             order.sale_weight = sum(order_lines.mapped("weight"))
 
-    @api.multi
     def action_confirm(self):
         """Inherit to check if sender_pays carrier line added to order lines.
         We don't want to break workflow of sale confirmation, so we added

@@ -1,4 +1,4 @@
-<?xml version="1.0"?>
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
         <record id="view_delivery_region_tree" model="ir.ui.view">
@@ -33,7 +33,6 @@
             <field name="name">Delivery Regions</field>
             <field name="type">ir.actions.act_window</field>
             <field name="res_model">delivery.region</field>
-            <field name="view_type">form</field>
             <field name="view_mode">tree,form</field>
             <field name="domain">[]</field>
             <field name="help" type="html">

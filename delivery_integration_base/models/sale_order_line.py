@@ -32,8 +32,7 @@ class SaleOrderLine(models.Model):
         digits=dp.get_precision("Product Unit of Measure"),
         compute="_compute_deci",
     )
-
-    @api.multi
+    
     def _compute_deci(self):
         for line in self:
             carrier = line.order_id.carrier_id
@@ -46,7 +45,6 @@ class SaleOrderLine(models.Model):
             line.deci = deci
 
     @api.depends("product_id", "product_uom_qty", "product_uom", "state", "is_delivery")
-    @api.multi
     def _compute_line_weight_volume(self):
         # volume in litre, weight in Kg
         uom_kg = self.env.ref("uom.product_uom_kgm")

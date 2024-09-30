@@ -10,7 +10,7 @@
                 <attribute name="context">{'check_order_lines_deci': 1}</attribute>
             </xpath>
 
-            <button name="action_confirm" position="before">
+            <!-- <button name="action_confirm" position="before">
                 <button name="action_sale_get_rates_wizard"
                         type="object"
                         Help="Get delivery rates for this order"
@@ -20,11 +20,11 @@
                          ('carrier_payment_type', '=', 'customer_pays'),
                          ('state','in', ['done', 'cancel', 'sale'])
                          ]}"/>
-            </button>
-            <xpath expr="//button[@name='get_delivery_price']" position="replace">
+            </button> -->
+            <!-- <xpath expr="//button[@name='get_delivery_price']" position="replace">
                 <field name="carrier_payment_type" invisible="1"/>
-            </xpath>
-            <xpath expr="//field[@name='delivery_price']" position="after">
+            </xpath> -->
+            <!-- <xpath expr="//field[@name='delivery_price']" position="after">
                 <field name="currency_id_try" invisible="1"/>
 
                 <field name='delivery_price_try'
@@ -35,22 +35,22 @@
                        attrs="{'invisible': ['|', ('currency_id', '=', 'currency_id_try'), ('carrier_id','=', False)]}"
                 />
 
-            </xpath>
-            <xpath expr="//button[@name='set_delivery_line']" position="replace">
+            </xpath> -->
+            <!-- <xpath expr="//button[@name='set_delivery_line']" position="replace">
                 <span>
                     <div class="col-12">
                         <span class="ml-3">Sale Deci:</span>
                         <field name="sale_deci" readonly="1"/>
                     </div>
                 </span>
-            </xpath>
+            </xpath> -->
 
-            <xpath expr="//label[@for='analytic_tag_ids']" position="before">
+            <!-- <xpath expr="//label[@for='analytic_tag_ids']" position="before">
                 <label for="deci">Deci: </label>
                 <div>
                     <field name="deci" class="oe_inline"/>
                 </div>
-            </xpath>
+            </xpath> -->
         </field>
     </record>
 </odoo>

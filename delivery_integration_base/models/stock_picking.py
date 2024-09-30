@@ -78,7 +78,6 @@ class StockPicking(models.Model):
         readonly=True,
     )
 
-    @api.multi
     def _compute_shipping_cost_try(self):
         for picking in self:
             try_currency = picking.shipping_currency_id._convert(
@@ -89,7 +88,6 @@ class StockPicking(models.Model):
             )
             picking.carrier_shipping_cost_try = try_currency
 
-    @api.multi
     def _compute_shipping_currency_id(self):
         """
         Compute the shipping currency based on the priorities
@@ -100,7 +98,6 @@ class StockPicking(models.Model):
                 picking.carrier_id.currency_id or picking.company_id.currency_id
             )
 
-    @api.multi
     def _compute_picking_total_deci(self):
         """
         Compute the picking total deci based on the move lines
@@ -111,7 +108,6 @@ class StockPicking(models.Model):
             factor = picking.carrier_id._get_dimension_factor(deci)
             picking.picking_total_deci = deci * factor
 
-    @api.multi
     def _compute_sale_shipping_cost(self):
         """
         Compute the shipping cost based on active move lines
@@ -226,7 +222,6 @@ class StockPicking(models.Model):
             )
         return True
 
-    @api.multi
     def _add_delivery_cost_to_so(self):
         """
         # Todo: compute delivery cost and add it to the sale order, odoo's function doesn't meet the requirements.
