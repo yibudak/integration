@@ -21,7 +21,6 @@ class IapAccount(models.Model):
         if self.provider == "sms_verimor_http":
             return "sms"
 
-    @api.one
     def get_verimor_sms_balance(self):
 
         if not self or not (self.sms_verimor_http_username and self.sms_verimor_http_password):

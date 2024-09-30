@@ -4,7 +4,7 @@
 {
     "name": "Sms Verimor HTTP",
     "summary": "Send sms using Verimor http API",
-    "version": "12.0.1.0.0",
+    "version": "13.0.1.0.0",
     "category": "SMS",
     "website": "https://github.com/odoo-turkey",
     "author": "Yiğit Budak, Odoo Turkey Localization Group",

@@ -32,7 +32,6 @@ class BulutsantralimConnector(models.Model):
          'Call timeout must be between 10 and 60.')
     ]
 
-    @api.one
     def _start_call_verimor(self, number, caller):
         params = {
             'key': self.api_key,

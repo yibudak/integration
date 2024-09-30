@@ -3,7 +3,7 @@
 
 {
     'name': 'Verimor Bulutsantralim Connector',
-    'version': '12.0.1.0.2',
+    'version': '13.0.1.0.2',
     'category': 'Phone',
     'license': 'AGPL-3',
     'summary': 'Verimor Bulutsantralim Odoo Connector',
