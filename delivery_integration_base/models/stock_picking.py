@@ -35,11 +35,23 @@ class StockPicking(models.Model):
         compute="_compute_sale_shipping_cost",
         currency_field="shipping_currency_id",
     )
+    sale_shipping_cost_try = fields.Monetary(
+        "Sale Shipping Cost",
+        help="Sale shipping cost no VAT",
+        compute="_compute_sale_shipping_cost",
+        currency_field="currency_id_try",
+    )
     carrier_shipping_cost = fields.Monetary(
         "Carrier Shipping Cost",
         help="Carrier shipping cost",
         default=0.0,
         currency_field="shipping_currency_id",
+    )
+    carrier_shipping_cost_try = fields.Monetary(
+        "Shipping Cost (TRY)",
+        help="Shipping Cost No VAT (TRY)",
+        currency_field="currency_id_try",
+        compute="_compute_shipping_cost_try",
     )
     carrier_shipping_vat = fields.Monetary(
         "Shipping VAT",
@@ -59,7 +71,25 @@ class StockPicking(models.Model):
         help="Carrier Currency",
         compute="_compute_shipping_currency_id",
     )
+    currency_id_try = fields.Many2one(
+        "res.currency",
+        "Currency",
+        related="company_id.currency_id",
+        readonly=True,
+    )
 
+    @api.multi
+    def _compute_shipping_cost_try(self):
+        for picking in self:
+            try_currency = picking.shipping_currency_id._convert(
+                picking.carrier_shipping_cost,
+                picking.currency_id_try,
+                picking.company_id,
+                picking.date,
+            )
+            picking.carrier_shipping_cost_try = try_currency
+
+    @api.multi
     def _compute_shipping_currency_id(self):
         """
         Compute the shipping currency based on the priorities
@@ -67,21 +97,21 @@ class StockPicking(models.Model):
         """
         for picking in self:
             picking.shipping_currency_id = (
-                picking.sale_id.currency_id
-                or picking.carrier_id.currency_id
-                or picking.company_id.currency_id
+                picking.carrier_id.currency_id or picking.company_id.currency_id
             )
 
+    @api.multi
     def _compute_picking_total_deci(self):
         """
         Compute the picking total deci based on the move lines
         :return:
         """
         for picking in self:
-            picking.picking_total_deci = sum(
-                picking.mapped("move_lines.sale_line_id.deci")
-            )
+            deci = sum(picking.mapped("move_lines.sale_line_id.deci"))
+            factor = picking.carrier_id._get_dimension_factor(deci)
+            picking.picking_total_deci = deci * factor
 
+    @api.multi
     def _compute_sale_shipping_cost(self):
         """
         Compute the shipping cost based on active move lines
@@ -92,14 +122,23 @@ class StockPicking(models.Model):
             sale_move_lines = picking.move_lines.filtered("sale_line_id")
             for move in sale_move_lines:
                 sale_id = move.sale_line_id.order_id
+                ol = move.sale_line_id
+                ol_deci = ol.deci * sale_id.carrier_id._get_dimension_factor(ol.deci)
                 deliver_cost = sum(
-                    sale_id.order_line.filtered("is_delivery").mapped("price_total")
+                    sale_id.order_line.filtered("is_delivery").mapped("price_unit")
                 )
                 sale_deci = sale_id.sale_deci
                 if deliver_cost and sale_deci:
                     # compute weighted average
-                    total_cost += (deliver_cost / sale_deci) * move.sale_line_id.deci
-            picking.sale_shipping_cost = total_cost
+                    total_cost += (deliver_cost / sale_deci) * ol_deci
+                picking.sale_shipping_cost = total_cost
+                try_currency = sale_id.currency_id._convert(
+                    total_cost,
+                    picking.currency_id_try,
+                    picking.company_id,
+                    picking.date,
+                )
+                picking.sale_shipping_cost_try = try_currency
 
     def _tracking_status_notification(self):
         if (

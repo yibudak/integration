@@ -12,12 +12,15 @@
                 <field name="partner_id" />
                 <field name="sale_id" />
                 <field name="carrier_id" />
-                <field name="sale_shipping_cost" sum="True"/>
-                <field name="carrier_shipping_cost" sum="True"/>
+<!--                <field name="sale_shipping_cost"/>-->
+                <field name="sale_shipping_cost_try" sum="True"/>
+<!--                <field name="carrier_shipping_cost"/>-->
+                <field name="carrier_shipping_cost_try" sum="True" />
                 <field name="picking_total_deci" sum="True"/>
-                <field name="carrier_total_deci" sum="True"/>
                 <field name="picking_total_weight" sum="True"/>
+                <field name="carrier_total_deci" sum="True"/>
                 <field name="shipping_currency_id" invisible="1"/>
+                <field name="currency_id_try" invisible="1"/>
             </tree>
         </field>
     </record>

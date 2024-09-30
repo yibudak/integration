@@ -10,6 +10,12 @@
                 <button name="action_query_transaction" string="Garanti:    Query Status" type="object"
                         class="btn btn-primary"/>
             </xpath>
+
+            <xpath expr="//sheet" position="inside">
+                <h3>Transaction Logs</h3>
+                <field name="log_ids" widget="one2many_list"/>
+            </xpath>
+
         </field>
     </record>
 

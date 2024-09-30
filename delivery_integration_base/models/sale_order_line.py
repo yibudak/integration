@@ -3,45 +3,86 @@
 from odoo import models, fields, api, _
 from odoo.addons import decimal_precision as dp
 from odoo.tools import float_is_zero
-from odoo.exceptions import ValidationError
+import logging
+
+_logger = logging.getLogger(__name__)
 
 
 class SaleOrderLine(models.Model):
     _inherit = "sale.order.line"
 
+    volume = fields.Float(
+        string="Volume (in litre)",
+        digits=dp.get_precision("Product Unit of Measure"),
+        compute="_compute_line_weight_volume",
+        store=True,
+        readonly=True,
+    )
+
+    weight = fields.Float(
+        string="Weight (in kg)",
+        digits=dp.get_precision("Product Unit of Measure"),
+        compute="_compute_line_weight_volume",
+        store=True,
+        readonly=True,
+    )
+
     deci = fields.Float(
         string="Deci",
         digits=dp.get_precision("Product Unit of Measure"),
+        compute="_compute_deci",
     )
 
     @api.multi
-    def _compute_line_deci(self, deci_type):
+    def _compute_deci(self):
+        for line in self:
+            carrier = line.order_id.carrier_id
+            if carrier:
+                deci_type = carrier.deci_type
+            else:
+                deci_type = 3000
+
+            deci = max(line.weight, (line.volume * 1000) / deci_type)
+            line.deci = deci
+
+    @api.depends("product_id", "product_uom_qty", "product_uom", "state", "is_delivery")
+    @api.multi
+    def _compute_line_weight_volume(self):
+        # volume in litre, weight in Kg
         uom_kg = self.env.ref("uom.product_uom_kgm")
         uom_dp = 4
-        # volume in litre, weight in Kg
-        total = weight = volume = quantity = deci = 0.0
-        total_delivery = 0.0
         for line in self:
             product = line.product_id
-            if line.state == "cancel":
-                continue
-            if line.is_delivery:
-                total_delivery += line.price_total
-            if not product or line.is_delivery:
+            if line.state == "cancel" or not product or line.is_delivery:
+                line.volume = 0.0
+                line.weight = 0.0
                 continue
 
             if product.type == "product" and (
                 float_is_zero(product.weight, uom_dp)
                 or float_is_zero(product.volume, uom_dp)
             ):
-                raise ValidationError(
-                    _("Cannot calculate Deci, Weight or Volume for product %s missing.")
+                _logger.warning(
+                    "Cannot calculate Volume, Weight or Volume for product %s missing."
                     % (product.display_name)
                 )
+                line.volume = 0.0
+                line.weight = 0.0
+                continue
 
-            line_qty = line.product_uom._compute_quantity(
-                qty=line.product_uom_qty, to_unit=product.uom_id, round=False
-            )
+            try:
+                line_qty = line.product_uom._compute_quantity(
+                    qty=line.product_uom_qty, to_unit=product.uom_id, round=False
+                )
+            except Exception as e:
+                _logger.warning(
+                    "Quantity conversion error for product %s: %s"
+                    % (product.display_name, e)
+                )
+                line.volume = 0.0
+                line.weight = 0.0
+                continue
+
             line_kg = product.weight_uom_id._compute_quantity(
                 qty=line_qty * product.weight,
                 to_unit=uom_kg,
@@ -61,17 +102,5 @@ class SaleOrderLine(models.Model):
                 )
             else:
                 line_litre = line_qty * line.product_id.volume
-
-            calculated_deci = max(line_kg, (line_litre * 1000.0) / deci_type)
-            line.deci = calculated_deci
-            deci += calculated_deci
-            weight += line_kg
-            volume += line_litre
-            quantity += line_qty
-        return {
-            "deci": deci,
-            "weight": weight,
-            "volume": volume,
-            "quantity": quantity,
-            "total_delivery": total_delivery,
-        }
+            line.volume = line_litre
+            line.weight = line_kg

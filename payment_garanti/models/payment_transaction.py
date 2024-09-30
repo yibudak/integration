@@ -4,7 +4,7 @@ import logging
 from odoo import _, fields, models, api
 from odoo.exceptions import ValidationError
 from .garanti_connector import GarantiConnector
-from odoo.http import request
+from odoo.osv import expression
 
 # from odoo.addons.payment import utils as payment_utils
 
@@ -22,8 +22,31 @@ class PaymentTransaction(models.Model):
         readonly=True,
         copy=False,
     )
-
     garanti_xid = fields.Char(string="Garanti XID", readonly=True, copy=False)
+    log_ids = fields.Many2many(
+        "ir.logging",
+        string="Logs",
+        store=False,
+        help="Logs related to the transaction",
+        compute="_compute_transaction_log_ids",
+    )
+
+    @api.multi
+    def _compute_transaction_log_ids(self):
+        for tx in self:
+            domain = [("message", "ilike", tx.reference.split("-")[0])]
+            if tx.garanti_secure3d_hash:
+                domain = expression.OR(
+                    [domain, [("message", "ilike", tx.garanti_secure3d_hash)]]
+                )
+            if tx.garanti_xid:
+                domain = expression.OR([domain, [("message", "ilike", tx.garanti_xid)]])
+
+            domain = expression.AND(
+                [domain, ["|", ("func", "ilike", "3d"), ("func", "ilike", "garanti")]]
+            )
+
+            tx.log_ids = self.env["ir.logging"].search(domain)
 
     @api.multi
     def _set_transaction_error(self, msg):
@@ -40,7 +63,7 @@ class PaymentTransaction(models.Model):
             error_message = (
                 self.env["payment.provider.error"]
                 .sudo()
-                .search([("error_message", "=", msg)], limit=1)
+                .search([("full_message", "=", msg)], limit=1)
             )
             if error_message and error_message.modified_error_message:
                 for tx in error_txs:
@@ -144,7 +167,7 @@ class PaymentTransaction(models.Model):
         self.garanti_xid = notification_data.get("xid")
         md_status = notification_data.get("mdstatus")
         error_msg = notification_data.get("mderrormessage")
-        if md_status != "1":
+        if md_status not in ["1", "2", "3", "4", "5"]:
             self._set_transaction_error(error_msg)
         else:
             connector = GarantiConnector(

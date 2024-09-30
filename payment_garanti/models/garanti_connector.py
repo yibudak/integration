@@ -23,7 +23,7 @@ class GarantiConnector:
         self.amount = self._get_amount(amount)
         self.currency_id = self._get_currency_id()
         self.card_args = card_args
-        self.client_ip = client_ip
+        self.client_ip = self._get_ip_address(client_ip)
         self.timeout = 10
         self._session = requests.Session()
         self._debug = self.provider.debug_logging
@@ -40,12 +40,23 @@ class GarantiConnector:
         """
         return self.tx.reference.split("-")[0]
 
+    def _get_ip_address(self, client_ip):
+        """
+        Garanti Sanal Pos API expects client IP address in IPv4 format.
+        """
+        default_ip = "127.0.0.1"
+        if client_ip and ":" not in client_ip:
+            return client_ip
+        else:
+            return default_ip
+
     def _get_partner_email(self):
         """
         Only first email will be used.
         :return:
         """
-        return self.tx.partner_email.split(",")[0]
+        single_email = self.tx.partner_email.split(",")[0]
+        return single_email.replace("+", "")
 
     def _get_amount(self, amount):
         """Get amount in kuruş.
@@ -198,6 +209,33 @@ class GarantiConnector:
         else:
             return "en"
 
+    def _build_notification_data_for_non_3ds_payment(self, card_args):
+        return {
+            "terminalprovuserid": self.provider.garanti_prov_user,
+            "terminaluserid": self.provider.garanti_terminal_id,
+            "clientid": self.provider.garanti_terminal_id,
+            "terminalmerchantid": self.provider.garanti_merchant_id,
+            "customeripaddress": self.client_ip,
+            "customeremailaddress": self.tx.partner_id.email,
+            "card_number": card_args.get("card_number").replace(" ", ""),
+            "card_cvv": card_args.get("card_cvv"),
+            "card_name": card_args.get("card_name"),
+            "card_expire": "%s%s"
+            % (
+                card_args.get("card_valid_month").zfill(2),
+                card_args.get("card_valid_year")[2:],
+            ),
+            "oid": self.reference,
+            "txntype": "sales",
+            "txninstallmentcount": "",
+            "txnamount": str(self.amount),
+            "txncurrencycode": self.provider._garanti_get_currency_code(
+                self.currency_id, self.tx
+            ),
+            "non_3ds": True,
+            "mdstatus": "1",
+        }
+
     def _garanti_create_payment_vals(self):
         """Create parameters for Garanti Sanal Pos API.
 
@@ -249,12 +287,16 @@ class GarantiConnector:
         :return: Hash data
         """
         hash_data = (
-            str(self.notification_data.get("oid"))
-            + str(self.notification_data.get("clientid"))  # orderid
-            + str(self.notification_data.get("txnamount"))  # clientid
-            +  # txnamount
-            # str(self.notification_data.get('txncurrencycode')) +  # txncurrencycode
-            str(self._garanti_compute_security_data())  # securitydata
+            str(self.notification_data.get("oid"))  # Order ID
+            + str(self.notification_data.get("terminaluserid"))  # Terminal User ID
+            + "%s"
+            % (
+                self.notification_data.get("card_number")
+                if self.notification_data.get("non_3ds")
+                else ""
+            )  # Card Number
+            + str(self.notification_data.get("txnamount"))  # Transaction Amount
+            + str(self._garanti_compute_security_data())  # Security Data
         )
         return sha1(hash_data.encode("utf-8")).hexdigest().upper()
 
@@ -268,9 +310,9 @@ class GarantiConnector:
         etree.SubElement(terminal, "ProvUserID").text = self.notification_data.get(
             "terminalprovuserid"
         )
-        etree.SubElement(
-            terminal, "HashData"
-        ).text = self._garanti_compute_callback_hash_data()
+        etree.SubElement(terminal, "HashData").text = (
+            self._garanti_compute_callback_hash_data()
+        )
         etree.SubElement(terminal, "UserID").text = self.notification_data.get(
             "terminaluserid"
         )
@@ -302,9 +344,18 @@ class GarantiConnector:
         :return: Card node
         """
         card = etree.SubElement(gvps_request, "Card")
-        etree.SubElement(card, "Number").text = ""
-        etree.SubElement(card, "ExpireDate").text = ""
-        etree.SubElement(card, "CVV2").text = ""
+        if self.notification_data.get("non_3ds"):
+            etree.SubElement(card, "Number").text = self.notification_data.get(
+                "card_number"
+            )
+            etree.SubElement(card, "ExpireDate").text = self.notification_data.get(
+                "card_expire"
+            )
+            etree.SubElement(card, "CVV2").text = self.notification_data.get("card_cvv")
+        else:
+            etree.SubElement(card, "Number").text = ""
+            etree.SubElement(card, "ExpireDate").text = ""
+            etree.SubElement(card, "CVV2").text = ""
         return True
 
     def _garanti_address_list_node(self, order_node):
@@ -345,27 +396,30 @@ class GarantiConnector:
         etree.SubElement(transaction, "Type").text = self.notification_data.get(
             "txntype"
         )
-        etree.SubElement(
-            transaction, "InstallmentCnt"
-        ).text = self.notification_data.get("txninstallmentcount")
+        etree.SubElement(transaction, "InstallmentCnt").text = (
+            self.notification_data.get("txninstallmentcount")
+        )
         etree.SubElement(transaction, "Amount").text = self.notification_data.get(
             "txnamount"
         )
         etree.SubElement(transaction, "CurrencyCode").text = self.notification_data.get(
             "txncurrencycode"
         )
-        etree.SubElement(transaction, "CardholderPresentCode").text = "13"
+        etree.SubElement(transaction, "CardholderPresentCode").text = (
+            "0" if self.notification_data.get("non_3ds") else "13"
+        )
         etree.SubElement(transaction, "MotoInd").text = "N"
 
-        secure3d = etree.SubElement(transaction, "Secure3D")
-        etree.SubElement(
-            secure3d, "AuthenticationCode"
-        ).text = self.notification_data.get("cavv")
-        etree.SubElement(secure3d, "SecurityLevel").text = self.notification_data.get(
-            "eci"
-        )
-        etree.SubElement(secure3d, "TxnID").text = self.notification_data.get("xid")
-        etree.SubElement(secure3d, "Md").text = self.notification_data.get("md")
+        if not self.notification_data.get("non_3ds"):
+            secure3d = etree.SubElement(transaction, "Secure3D")
+            etree.SubElement(secure3d, "AuthenticationCode").text = (
+                self.notification_data.get("cavv")
+            )
+            etree.SubElement(secure3d, "SecurityLevel").text = (
+                self.notification_data.get("eci")
+            )
+            etree.SubElement(secure3d, "TxnID").text = self.notification_data.get("xid")
+            etree.SubElement(secure3d, "Md").text = self.notification_data.get("md")
         return True
 
     def _garanti_create_callback_xml(self):
@@ -415,7 +469,7 @@ class GarantiConnector:
             reason_code = root.find(".//Transaction/Response/ReasonCode").text
             message = root.find(".//Transaction/Response/Message").text
             if reason_code != "00" or message != "Approved":
-                return root.find(".//Transaction/Response/ErrorMsg").text
+                return f"{reason_code}: {root.find('.//Transaction/Response/ErrorMsg').text}"
             else:
                 return message
         except Exception:  # pylint: disable=broad-except
@@ -479,11 +533,11 @@ class GarantiConnector:
                 _("Payment Error: An error occurred. Please try again.")
             )
         root = etree.fromstring(resp.content)
-        order_history = root.find('.//OrderHistInqResult')
+        order_history = root.find(".//OrderHistInqResult")
         if order_history is None:
             return False
 
-        if '00' in [o.text for o in order_history.findall('.//ReturnCode')]:
+        if "00" in [o.text for o in order_history.findall(".//ReturnCode")]:
             return True
 
         else:

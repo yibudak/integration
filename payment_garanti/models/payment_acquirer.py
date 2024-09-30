@@ -116,7 +116,8 @@ class PaymentAcquirerGaranti(models.Model):
                         error_code
                         and error_message
                         and not error_obj.search_read(
-                            [("error_message", "=", error_message)], limit=1
+                            [("full_message", "=", f"{error_code}: {error_message}")],
+                            limit=1,
                         )
                     ):
                         error_record = error_obj.create(
@@ -202,7 +203,7 @@ class PaymentAcquirerGaranti(models.Model):
         :return: The formatted card number
         """
         card_number = card_number.replace(" ", "")
-        if len(card_number) == 16 and card_number.isdigit():
+        if len(card_number) in [15, 16] and card_number.isdigit():
             return card_number
         else:
             raise ValidationError(_("Card number is not valid."))
@@ -233,13 +234,22 @@ class PaymentAcquirerGaranti(models.Model):
             card_args=card_args,
             client_ip=client_ip,
         )
-        method, resp = connector._garanti_make_payment_request()
-
-        return {
-            "status": "success",
-            "method": method,
-            "response": resp,
-        }
+        if tx.partner_id.country_id and tx.partner_id.country_id.code != "TR":
+            notification_data = connector._build_notification_data_for_non_3ds_payment(
+                card_args=card_args
+            )
+            tx._garanti_form_validate(notification_data)
+            return {
+                "status": "success",
+                "method": "non_3ds",
+            }
+        else:
+            method, resp = connector._garanti_make_payment_request()
+            return {
+                "status": "success",
+                "method": method,
+                "response": resp,
+            }
 
     def _garanti_validate_card_args(self, card_args):
         """
@@ -250,7 +260,7 @@ class PaymentAcquirerGaranti(models.Model):
         error = ""
         card_number = card_args.get("card_number")
         card_cvv = card_args.get("card_cvv")
-        if not card_number or len(card_number) < 16:
+        if not card_number or len(card_number) < 15:
             error += _("Card number is not valid.\n")
 
         if not card_cvv or len(card_cvv) < 3:
