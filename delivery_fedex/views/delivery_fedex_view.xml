@@ -1,0 +1,104 @@
+<odoo>
+    <data>
+        <!--     explicit list view definition -->
+
+        <record id="view_delivery_carrier_form" model="ir.ui.view">
+            <field name="model">delivery.carrier</field>
+            <field name="inherit_id" ref="delivery.view_delivery_carrier_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//notebook/page[1]" position='before'>
+                    <page
+                            string="Fedex Configuration"
+                            attrs="{'invisible': [('delivery_type', '!=', 'fedex')]}"
+                    >
+                        <group>
+                            <group string="Connection">
+                                <field
+                                        name="fedex_grant_type"
+                                        attrs="{'required': [('delivery_type', '=', 'fedex')]}"
+                                />
+                                <field name="fedex_client_id"/>
+                                <field name="fedex_client_secret"/>
+                                <field name="fedex_account_number"/>
+                            </group>
+                            <group string="Label">
+                                <field
+                                        name="fedex_label_format"
+                                        attrs="{'required': [('delivery_type', '=', 'fedex')]}"
+                                />
+                                <field name="fedex_label_file_type"/>
+                                <field name="fedex_label_stock_type"/>
+                            </group>
+                            <group string="Service">
+                                <field
+                                        name="fedex_service_type"
+                                        attrs="{'required': [('delivery_type', '=', 'fedex')]}"
+                                />
+                                <field
+                                        name="fedex_dropoff_type"
+                                        attrs="{'required': [('delivery_type', '=', 'fedex')]}"
+                                />
+                            </group>
+                            <group string="Logistics">
+                                <field
+                                        name="fedex_package_type"
+                                        attrs="{'required': [('delivery_type', '=', 'fedex')]}"
+                                />
+                                <field
+                                        name="fedex_pickup_type"
+                                        attrs="{'required': [('delivery_type', '=', 'fedex')]}"
+                                />
+                                <field
+                                        name="fedex_weight_unit"
+                                        attrs="{'required': [('delivery_type', '=', 'fedex')]}"
+                                />
+                            </group>
+                        </group>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- actions opening views on models -->
+
+        <!--    <record model="ir.actions.act_window" id="module_template_1.action_window">-->
+        <!--      <field name="name">module_template_1 window</field>-->
+        <!--      <field name="res_model">module_template_1.module_template_1</field>-->
+        <!--      <field name="view_mode">tree,form</field>-->
+        <!--    </record>-->
+
+
+        <!-- server action to the one above -->
+        <!--
+            <record model="ir.actions.server" id="module_template_1.action_server">
+              <field name="name">module_template_1 server</field>
+              <field name="model_id" ref="model_module_template_1_module_template_1"/>
+              <field name="state">code</field>
+              <field name="code">
+                action = {
+                  "type": "ir.actions.act_window",
+                  "view_mode": "tree,form",
+                  "res_model": model._name,
+                }
+              </field>
+            </record>
+        -->
+
+        <!-- Top menu item -->
+        <!--
+            <menuitem name="module_template_1" id="module_template_1.menu_root"/>
+        -->
+        <!-- menu categories -->
+        <!--
+            <menuitem name="Menu 1" id="module_template_1.menu_1" parent="module_template_1.menu_root"/>
+            <menuitem name="Menu 2" id="module_template_1.menu_2" parent="module_template_1.menu_root"/>
+        -->
+        <!-- actions -->
+        <!--
+            <menuitem name="List" id="module_template_1.menu_1_list" parent="module_template_1.menu_1"
+                      action="module_template_1.action_window"/>
+            <menuitem name="Server to list" id="module_template_1" parent="module_template_1.menu_2"
+                      action="module_template_1.action_server"/>
+        -->
+    </data>
+</odoo>
