@@ -18,4 +18,5 @@
         # 'report/yurtici_sms_template.xml',
         # 'report/reports.xml',
     ],
+
 }
