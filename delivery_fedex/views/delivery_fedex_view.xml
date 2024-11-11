@@ -1,0 +1,36 @@
+<odoo>
+    <data>
+        <record id="view_delivery_carrier_fedex_form" model="ir.ui.view">
+            <field name="model">delivery.carrier</field>
+            <field name="inherit_id" ref="delivery.view_delivery_carrier_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//notebook/page[1]" position='before'>
+                    <page string="FedEx Configuration" attrs="{'invisible': [('delivery_type', '!=', 'fedex')]}">
+                        <group>
+                            <group string="Connection">
+                                <field name="fedex_grant_type" attrs="{'required': [('delivery_type', '=', 'fedex')]}" />
+                                <field name="fedex_client_id" attrs="{'required': [('delivery_type', '=', 'fedex')]}"/>
+                                <field name="fedex_client_secret" attrs="{'required': [('delivery_type', '=', 'fedex')]}"/>
+                                <field name="fedex_account_number" attrs="{'required': [('delivery_type', '=', 'fedex')]}"/>
+                            </group>
+                            <group string="Label">
+                                <field name="fedex_label_format" attrs="{'required': [('delivery_type', '=', 'fedex')]}" />
+                                <field name="fedex_label_file_type" attrs="{'required': [('delivery_type', '=', 'fedex')]}"/>
+                                <field name="fedex_label_stock_type" attrs="{'required': [('delivery_type', '=', 'fedex')]}"/>
+                            </group>
+                            <group string="Service">
+                                <field name="fedex_service_type" attrs="{'required': [('delivery_type', '=', 'fedex')]}" />
+                                <field name="fedex_dropoff_type" attrs="{'required': [('delivery_type', '=', 'fedex')]}" />
+                            </group>
+                            <group string="Logistics">
+                                <field name="fedex_package_type" attrs="{'required': [('delivery_type', '=', 'fedex')]}" />
+                                <field name="fedex_pickup_type" attrs="{'required': [('delivery_type', '=', 'fedex')]}" />
+                                <field name="fedex_weight_unit" attrs="{'required': [('delivery_type', '=', 'fedex')]}" />
+                            </group>
+                        </group>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
